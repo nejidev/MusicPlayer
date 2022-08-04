@@ -7,6 +7,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.os.Binder;
 import android.os.Build;
@@ -21,6 +22,7 @@ import androidx.annotation.NonNull;
 import androidx.core.app.NotificationCompat;
 
 import java.io.IOException;
+import java.util.Random;
 
 import static com.nejidev.media.MainActivity.CMD_PLAY;
 
@@ -62,7 +64,7 @@ public class MusicPlayerService extends Service implements Runnable , MediaPlaye
                     builder = new NotificationCompat.Builder(this, channelId);
                     builder.setContentIntent(pendingIntent);
 
-                    builder.setSmallIcon(R.mipmap.ic_launcher);
+                    builder.setSmallIcon(R.drawable.background);
                     builder.setTicker("MediaPlayer");
                     builder.setWhen(System.currentTimeMillis());
                     builder.setDefaults(NotificationCompat.FLAG_ONLY_ALERT_ONCE);
@@ -82,9 +84,8 @@ public class MusicPlayerService extends Service implements Runnable , MediaPlaye
                     builder.setContentTitle(MusicPlayerApp.playerName);
                     builder.setContentText(progress + "%");
                     builder.setProgress(100, progress, false);
-                    notificationManager.notify(0, builder.build());
                     //发送通知
-                    notificationManager.notify(0, builder.build());
+                    notificationManager.notify(1, builder.build());
                 }
                 else{
                     //低于 android 8 的版本
@@ -103,7 +104,7 @@ public class MusicPlayerService extends Service implements Runnable , MediaPlaye
                     builder.setProgress(100, progress, false);
 
                     //发送通知
-                    notificationManager.notify(0, builder.build());
+                    notificationManager.notify(1, builder.build());
                 }
 
                 try {
@@ -126,6 +127,33 @@ public class MusicPlayerService extends Service implements Runnable , MediaPlaye
         }
     }
 
+    private void PlayFile(MediaItem mediaDir)
+    {
+        String mediaFilePath = mediaDir.getPath();
+        Log.i(TAG, "PlayFile:" + mediaFilePath);
+
+        if(! MediaItem.checkMediaFile(mediaDir.getPath())) {
+            return;
+        }
+
+        MusicPlayerApp.playerName = mediaDir.getName();
+        mMediaPlayer.reset();
+        try {
+            mMediaPlayer.setDataSource(mediaFilePath);
+            mMediaPlayer.prepare();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        mediaDuration = mMediaPlayer.getDuration();
+
+        Log.i(TAG, "mediaDuration:" + mediaDuration);
+
+        mediaPlayerThreadRuing = true;
+
+        mMediaPlayer.start();
+    }
+
     @Override
     public void onCompletion(MediaPlayer mediaPlayer) {
         mediaDuration = 0;
@@ -141,6 +169,32 @@ public class MusicPlayerService extends Service implements Runnable , MediaPlaye
             clientMessenger.send(message);
         } catch (RemoteException e) {
             e.printStackTrace();
+        }
+
+        String playMode = MusicPlayerApp.playerMode;
+        int playerItemPosition = MusicPlayerApp.playerItemPosition;
+        if(playMode.equals("All")){
+            playerItemPosition++;
+            if(playerItemPosition >= (MusicPlayerApp.playerItemMax-1)){
+                playerItemPosition = 0;
+            }
+        }
+        else if(playMode.equals("Rand")){
+            Random rand = new Random();
+            rand.setSeed(System.currentTimeMillis());
+            playerItemPosition = rand.nextInt(MusicPlayerApp.playerItemMax);
+        }
+        playerItemPosition = Math.max(playerItemPosition, 1);
+        MusicPlayerApp.playerItemPosition = playerItemPosition;
+
+        MediaItem mediaDir = MusicPlayerApp.mediaItems.get(playerItemPosition);
+        String mediaDirPath = mediaDir.getPath();
+
+        Log.i(TAG, "playerItemPosition:" + playerItemPosition);
+        Log.i(TAG, "mediaDirPath:" + mediaDirPath);
+
+        if(MediaItem.checkMediaFile(mediaDirPath)) {
+            PlayFile(mediaDir);
         }
     }
 
@@ -229,6 +283,7 @@ public class MusicPlayerService extends Service implements Runnable , MediaPlaye
         Log.i(TAG, "onCreate");
         mMessenger = new Messenger(handler);//初始化Service信使
         mediaPlayerThread.start();
+        mMediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
         mMediaPlayer.setOnCompletionListener(this);
     }
 
@@ -236,6 +291,38 @@ public class MusicPlayerService extends Service implements Runnable , MediaPlaye
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.i(TAG, "onStartCommand flags:" +flags + " startId:"+startId);
         super.onStartCommand(intent, flags, startId);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            String channelId = "message";
+            String channelName = "message";
+            NotificationChannel notificationChannel;
+            NotificationCompat.Builder builder;
+
+            NotificationManager notificationManager = (NotificationManager) this.getSystemService(Context.NOTIFICATION_SERVICE);
+            builder = new NotificationCompat.Builder(this, channelId);
+
+            builder.setSmallIcon(R.drawable.background);
+            builder.setTicker("MediaPlayer");
+            builder.setWhen(System.currentTimeMillis());
+            builder.setDefaults(NotificationCompat.FLAG_ONLY_ALERT_ONCE);
+            builder.setSound(null);
+            builder.setVibrate(new long[]{0});
+            //创建一个message通道，名字为消息
+            notificationChannel = new NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_LOW);
+            notificationChannel.enableLights(false);
+            notificationChannel.enableVibration(false);
+            notificationChannel.setVibrationPattern(new long[]{0});
+            notificationChannel.setSound(null, null);
+
+            notificationManager.createNotificationChannel(notificationChannel);
+
+            builder.setChannelId(channelId);
+
+            builder.setContentTitle("MediaPlayer");
+            builder.setContentText("MediaPlayer");
+            startForeground(1, builder.build());
+        }
+
         return START_STICKY;
     }
 

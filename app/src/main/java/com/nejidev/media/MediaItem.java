@@ -25,4 +25,20 @@ public class MediaItem {
     public String getPath(){
         return path;
     }
+
+    public static boolean checkMediaFile(String filePath)
+    {
+        int fileExtPos = filePath.lastIndexOf(".");
+        String fileExt = "";
+
+        if(0 <= fileExtPos) {
+            fileExt = filePath.substring(fileExtPos);
+        }
+        if(fileExt.toLowerCase().equals(".mp3") || fileExt.toLowerCase().equals(".m4a") || fileExt.toLowerCase().equals(".aac")
+                || fileExt.toLowerCase().equals(".ogg") || fileExt.toLowerCase().equals(".flac"))
+        {
+            return true;
+        }
+        return false;
+    }
 }

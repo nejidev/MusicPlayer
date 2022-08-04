@@ -20,6 +20,7 @@ import android.os.Message;
 import android.os.Messenger;
 import android.os.RemoteException;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.Button;
@@ -29,11 +30,9 @@ import android.widget.TextView;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
 
 public class MainActivity extends AppCompatActivity implements AdapterView.OnItemClickListener {
-    private static final String TAG = "MusicPlayer-MainActivity";
+    private static final String TAG = "MainActivity";
     private Intent mIntent;
 
     private Messenger mMessenger, remoteMessenger;//远程Service端的信使对象和客户端本地的信使对象
@@ -45,7 +44,6 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
     private Button mButtonMode;
     private SeekBar mSeekBarVolume;
 
-    private List<MediaItem> mMediaItems = new ArrayList<MediaItem>();
     public static int CMD_INIT = 0;
     public static int CMD_IDLE = 1;
     public static int CMD_PLAY = 2;
@@ -64,6 +62,10 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
 
         if (null == mIntent) {
             mIntent = new Intent(this, MusicPlayerService.class);
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(mIntent);
         }
 
         bindService();
@@ -123,15 +125,15 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
 
     private void showPlayDirs()
     {
-        mMediaItems.clear();
-        mMediaItems.add(new MediaItem("/"));
+        MusicPlayerApp.mediaItems.clear();
+        MusicPlayerApp.mediaItems.add(new MediaItem("/"));
 
         for(String dirPath : MusicPlayerApp.getInstance().mMediaDirs){
             Log.i(TAG, "showPlayDirs:" + dirPath);
-            mMediaItems.add(new MediaItem(dirPath));
+            MusicPlayerApp.mediaItems.add(new MediaItem(dirPath));
         }
 
-        MediaDirAdapter mediaDirAdapter = new MediaDirAdapter(MainActivity.this, R.layout.media_dir_view, mMediaItems);
+        MediaDirAdapter mediaDirAdapter = new MediaDirAdapter(MainActivity.this, R.layout.media_dir_view, MusicPlayerApp.mediaItems);
         ListView listview = findViewById(R.id.mediaDirListView);
         listview.setAdapter(mediaDirAdapter);
         listview.setOnItemClickListener(this);
@@ -152,19 +154,19 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
             return;
         }
 
-        mMediaItems.clear();
-        mMediaItems.add(new MediaItem("/"));
+        MusicPlayerApp.mediaItems.clear();
+        MusicPlayerApp.mediaItems.add(new MediaItem("/"));
 
         for(File sonFile : sonFiles) {
             Log.i(TAG, "sonFile:" + sonFile);
-            if(checkMediaFile(sonFile.getPath())) {
-                mMediaItems.add(new MediaItem(sonFile.getPath()));
+            if(MediaItem.checkMediaFile(sonFile.getPath())) {
+                MusicPlayerApp.mediaItems.add(new MediaItem(sonFile.getPath()));
             }
         }
 
-        MusicPlayerApp.getInstance().playerItemMax = mMediaItems.size();
+        MusicPlayerApp.getInstance().playerItemMax = MusicPlayerApp.mediaItems.size();
 
-        MediaDirAdapter mediaDirAdapter = new MediaDirAdapter(MainActivity.this, R.layout.media_dir_view, mMediaItems);
+        MediaDirAdapter mediaDirAdapter = new MediaDirAdapter(MainActivity.this, R.layout.media_dir_view, MusicPlayerApp.mediaItems);
         ListView listview = findViewById(R.id.mediaDirListView);
         listview.setAdapter(mediaDirAdapter);
     }
@@ -174,7 +176,7 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         String mediaFilePath = mediaDir.getPath();
         Log.i(TAG, "PlayFile:" + mediaFilePath);
 
-        if(! checkMediaFile(mediaDir.getPath())) {
+        if(! MediaItem.checkMediaFile(mediaDir.getPath())) {
             return;
         }
 
@@ -244,31 +246,6 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
                 mSeekBarVolume.setProgress(currentPosition);
             }
             if(CMD_FINISH == cmd){
-                String playMode = MusicPlayerApp.playerMode;
-                int playerItemPosition = MusicPlayerApp.playerItemPosition;
-                if(playMode.equals("All")){
-                    playerItemPosition++;
-                    if(playerItemPosition >= (MusicPlayerApp.playerItemMax-1)){
-                        playerItemPosition = 0;
-                    }
-                }
-                else if(playMode.equals("Rand")){
-                    Random rand = new Random();
-                    rand.setSeed(System.currentTimeMillis());
-                    playerItemPosition = rand.nextInt(MusicPlayerApp.playerItemMax);
-                }
-                playerItemPosition = Math.max(playerItemPosition, 1);
-                MusicPlayerApp.playerItemPosition = playerItemPosition;
-
-                MediaItem mediaDir = mMediaItems.get(playerItemPosition);
-                String mediaDirPath = mediaDir.getPath();
-
-                Log.i(TAG, "playerItemPosition:" + playerItemPosition);
-                Log.i(TAG, "mediaDirPath:" + mediaDirPath);
-
-                if(checkMediaFile(mediaDirPath)) {
-                    PlayFile(mediaDir);
-                }
             }
         }
     };
@@ -337,7 +314,7 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
 
                         Log.i(TAG, "filePath:" + filePath);
 
-                        if(checkMediaFile(filePath)){
+                        if(MediaItem.checkMediaFile(filePath)){
                             if(mMediaDirs.isEmpty())
                             {
                                 mMediaDirs.add(path);
@@ -363,7 +340,7 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
             @Override
             public void run() {
                 searchFiles(mediaPath);
-                Log.i(TAG, "mMediaItemS size:" + mMediaDirs.size());
+                Log.i(TAG, "MusicPlayerApp.mediaItems size:" + mMediaDirs.size());
 
                 MusicPlayerApp.getInstance().mMediaDirs = mMediaDirs;
                 MusicPlayerApp.getInstance().saveMediaDirInfo();
@@ -376,7 +353,7 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
     public void onItemClick(AdapterView<?> adapterView, View view, int position, long id) {
         Log.i(TAG, "onItemClick position:" + position);
 
-        MediaItem mediaItem = mMediaItems.get(position);
+        MediaItem mediaItem = MusicPlayerApp.mediaItems.get(position);
         String mediaDirPath = mediaItem.getPath();
 
         Log.i(TAG, "mediaDir mediaDirPath:" + mediaDirPath);
@@ -384,7 +361,7 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         if(mediaDirPath.equals("/")){
             showPlayDirs();
         }
-        else if(checkMediaFile(mediaDirPath)){
+        else if(MediaItem.checkMediaFile(mediaDirPath)){
             TextView playItemTextView = (TextView)view;
             playItemTextView.setTextColor(Color.argb(0xff, 0xd6,0x1b,0x5f));
             MusicPlayerApp.getInstance().playerItemPosition = position;
@@ -395,22 +372,6 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         }
     }
 
-    private boolean checkMediaFile(String filePath)
-    {
-        int fileExtPos = filePath.lastIndexOf(".");
-        String fileExt = "";
-
-        if(0 <= fileExtPos) {
-            fileExt = filePath.substring(fileExtPos);
-        }
-        if(fileExt.toLowerCase().equals(".mp3") || fileExt.toLowerCase().equals(".m4a") || fileExt.toLowerCase().equals(".aac")
-                || fileExt.toLowerCase().equals(".ogg") || fileExt.toLowerCase().equals(".flac"))
-        {
-            return true;
-        }
-        return false;
-    }
-
     public void buttonPrevClick(View view) {
         int position = MusicPlayerApp.getInstance().playerItemPosition;
         position = (position>1) ? position - 1: 0;
@@ -419,7 +380,7 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
 
         Log.i(TAG, "buttonPrevClick position:" + position + " playerItemMax:" + MusicPlayerApp.getInstance().playerItemMax);
 
-        MediaItem mediaItem = mMediaItems.get(position);
+        MediaItem mediaItem = MusicPlayerApp.mediaItems.get(position);
         PlayFile(mediaItem);
 
         MusicPlayerApp.getInstance().playerItemPosition = position;
@@ -454,7 +415,7 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
 
         Log.i(TAG, "buttonNextClick position:" + position + " playerItemMax:" + MusicPlayerApp.getInstance().playerItemMax);
 
-        MediaItem mediaItem = mMediaItems.get(position);
+        MediaItem mediaItem = MusicPlayerApp.mediaItems.get(position);
         PlayFile(mediaItem);
 
         MusicPlayerApp.getInstance().playerItemPosition = position;
@@ -483,5 +444,14 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         } catch (RemoteException e) {
             e.printStackTrace();
         }
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if(KeyEvent.KEYCODE_BACK == keyCode){
+            showPlayDirs();
+            return true;
+        }
+        return super.onKeyDown(keyCode, event);
     }
 }

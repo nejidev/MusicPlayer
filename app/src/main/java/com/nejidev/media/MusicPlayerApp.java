@@ -10,16 +10,18 @@ import androidx.annotation.NonNull;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.List;
 
 public class MusicPlayerApp extends Application {
-    private static final String TAG = "MusicPlayer-MusicPlayerApp";
+    private static final String TAG = "MusicPlayerApp";
     private static MusicPlayerApp mMusicPlayerApp;
-    public static ArrayList<String> mMediaDirs = new ArrayList<String>();
+    public static List<String> mMediaDirs = new ArrayList<String>();
 
     public static int playerItemMax = 0;
     public static int playerItemPosition = 0;
     public static String playerMode = "";
     public static String playerName = "";
+    public static List<MediaItem> mediaItems = new ArrayList<MediaItem>();
 
     public static void readMediaDirInfo(){
         SharedPreferences sharedPreferences = getInstance().getApplicationContext().getSharedPreferences("MediaDirInfo", Context.MODE_PRIVATE);
